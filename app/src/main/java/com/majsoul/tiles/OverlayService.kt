@@ -117,7 +117,7 @@ class OverlayService : Service() {
         val winW = (350 * density).toInt()
         val winH = (340 * density).toInt()
 
-        layoutParams = WindowManager.LayoutParams(
+        val lp = WindowManager.LayoutParams(
             winW, winH,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -155,7 +155,7 @@ class OverlayService : Service() {
         }
 
         overlayView = webView
-        windowManager.addView(overlayView, layoutParams)
+        windowManager.addView(overlayView, lp)
     }
 
     private fun performScreenshot() {

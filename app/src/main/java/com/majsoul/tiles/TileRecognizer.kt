@@ -8,6 +8,7 @@ import org.opencv.android.Utils
 import org.opencv.core.*
 import org.opencv.imgproc.Imgproc
 import java.io.IOException
+import kotlin.math.abs
 
 /**
  * 模板匹配识别日麻牌面（雀魂 Android 版）
