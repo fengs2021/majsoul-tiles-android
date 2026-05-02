@@ -122,9 +122,12 @@ class OverlayService : Service() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun createOverlayWindow() {
+        // 用固定高度避免 WebView WRAP_CONTENT 计算为 0
+        val panelHeight = (400 * resources.displayMetrics.density).toInt()
+        
         layoutParams = WindowManager.LayoutParams(
-            (360 * screenDensity / 160f).toInt(),  // 固定宽度 ~360dp
-            WindowManager.LayoutParams.WRAP_CONTENT, // 自适应高度
+            (360 * resources.displayMetrics.density).toInt(),
+            panelHeight,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else

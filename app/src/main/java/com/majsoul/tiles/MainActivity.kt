@@ -2,86 +2,101 @@ package com.majsoul.tiles
 
 import android.app.Activity
 import android.content.Intent
+import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 
 class MainActivity : Activity() {
     companion object {
-        const val OVERLAY_PERMISSION = 1001
-        const val SCREEN_CAPTURE = 1002
+        private const val TAG = "MainActivity"
+        private const val OVERLAY_PERMISSION = 1001
+        private const val SCREEN_CAPTURE = 1002
     }
 
-    private var launched = false
+    private var screenCaptureDone = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "onCreate")
 
-        // 第一步：检查悬浮窗权限
+        // 步骤 1：悬浮窗权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Log.d(TAG, "Requesting overlay permission")
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:$packageName")
             )
             startActivityForResult(intent, OVERLAY_PERMISSION)
-            return
+        } else {
+            // 已有悬浮窗权限，直接请求截图权限
+            requestCapture()
         }
-
-        // 第二步：请求截图权限
-        requestScreenCapture()
     }
 
-    private fun requestScreenCapture() {
-        val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        startActivityForResult(projectionManager.createScreenCaptureIntent(), SCREEN_CAPTURE)
+    private fun requestCapture() {
+        Log.d(TAG, "Requesting screen capture")
+        try {
+            val pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            val intent = pm.createScreenCaptureIntent()
+            startActivityForResult(intent, SCREEN_CAPTURE)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start capture intent", e)
+            // 无法截图（某些设备不支持），直接启动服务
+            Toast.makeText(this, "截图权限请求失败，仅支持手动分析", Toast.LENGTH_LONG).show()
+            launchService()
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        Log.d(TAG, "onActivityResult: request=$requestCode result=$resultCode hasData=${data != null}")
 
         when (requestCode) {
             OVERLAY_PERMISSION -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                    requestScreenCapture()
+                    Log.d(TAG, "Overlay permission granted, requesting capture")
+                    // 用 post 延迟一下，确保 Activity 状态稳定
+                    window.decorView.postDelayed({ requestCapture() }, 300)
                 } else {
-                    Toast.makeText(this, "需要悬浮窗权限才能运行", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "需要悬浮窗权限才能使用", Toast.LENGTH_LONG).show()
                     finish()
                 }
             }
 
             SCREEN_CAPTURE -> {
                 if (resultCode == RESULT_OK && data != null) {
-                    // 保存 MediaProjection 参数到静态字段
-                    OverlayService.mediaProjectionResultCode = resultCode
-                    OverlayService.mediaProjectionData = data
-                    // 先创建一次 MediaProjection 并保存在 Service 中
-                    // 这样权限 token 在 Activity finish 后仍然有效
-                    val pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                    val projection = pm.getMediaProjection(resultCode, data)
-                    OverlayService.mediaProjection = projection
+                    Log.d(TAG, "Screen capture granted")
+                    try {
+                        val pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                        val projection: MediaProjection = pm.getMediaProjection(resultCode, data)
+                        OverlayService.mediaProjection = projection
+                        OverlayService.mediaProjectionData = data
+                        OverlayService.mediaProjectionResultCode = resultCode
+                        screenCaptureDone = true
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to create MediaProjection", e)
+                    }
                 } else {
-                    // 用户拒绝了截图权限 — 仍然启动服务（只能手动选牌）
-                    Toast.makeText(this, "未授权截图，仅支持手动选牌分析", Toast.LENGTH_LONG).show()
+                    Log.d(TAG, "Screen capture denied or cancelled")
                 }
 
-                // 无论如何都启动悬浮窗服务
-                launchOverlayService()
+                // 不管有没有截图权限，都启动服务
+                launchService()
             }
         }
     }
 
-    private fun launchOverlayService() {
-        if (launched) return
-        launched = true
-
-        val serviceIntent = Intent(this, OverlayService::class.java)
+    private fun launchService() {
+        val intent = Intent(this, OverlayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
+            startForegroundService(intent)
         } else {
-            startService(serviceIntent)
+            startService(intent)
         }
         finish()
     }
