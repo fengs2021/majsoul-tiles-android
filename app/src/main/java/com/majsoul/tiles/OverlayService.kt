@@ -2,7 +2,6 @@ package com.majsoul.tiles
 
 import android.annotation.SuppressLint
 import android.app.*
-import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.hardware.display.DisplayManager
@@ -10,7 +9,6 @@ import android.hardware.display.VirtualDisplay
 import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
 import android.os.*
 import android.util.DisplayMetrics
 import android.util.Log
@@ -31,28 +29,23 @@ class OverlayService : Service() {
         const val NOTIFICATION_ID = 1001
         const val AUTO_SCREENSHOT_INTERVAL_MS = 5000L
 
+        // 由 MainActivity 在权限回调中注入
+        var mediaProjection: MediaProjection? = null
         var mediaProjectionResultCode: Int = -1
         var mediaProjectionData: Intent? = null
-        // 由 MainActivity 直接注入已创建好的 MediaProjection
-        var mediaProjection: MediaProjection? = null
     }
 
-    // 窗口管理
     private lateinit var windowManager: WindowManager
     private var overlayView: View? = null
-    private lateinit var layoutParams: WindowManager.LayoutParams
 
-    // WebView
     private lateinit var webView: WebView
 
-    // 截图（mediaProjection 在 companion object 中，由 MainActivity 注入）
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private var screenWidth = 0
     private var screenHeight = 0
     private var screenDensity = 0
 
-    // 自动截图
     private val autoScreenshotEnabled = AtomicBoolean(false)
     private val screenshotHandler = Handler(Looper.getMainLooper())
     private val screenshotRunnable = object : Runnable {
@@ -64,12 +57,11 @@ class OverlayService : Service() {
         }
     }
 
-    // 识别器（通过 Context 加载模板）
     private lateinit var tileRecognizer: TileRecognizer
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "OverlayService onCreate")
+        Log.d(TAG, "onCreate, projection=${mediaProjection != null}")
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
@@ -77,69 +69,67 @@ class OverlayService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         tileRecognizer = TileRecognizer(this)
 
-        // 获取屏幕参数
         val metrics = DisplayMetrics()
         windowManager.defaultDisplay.getRealMetrics(metrics)
         screenWidth = metrics.widthPixels
         screenHeight = metrics.heightPixels
         screenDensity = metrics.densityDpi
 
-        setupMediaProjection()
+        registerProjectionCallback()
         createOverlayWindow()
+    }
+
+    private fun registerProjectionCallback() {
+        mediaProjection?.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                Log.d(TAG, "MediaProjection stopped by system")
+                mediaProjection = null
+                runOnWebView("updateStatus('⚠ 截图权限失效，请重启App')")
+            }
+        }, Handler(Looper.getMainLooper()))
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID,
-                "牌效助手",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "悬浮窗牌效分析服务"
-            }
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
+                CHANNEL_ID, "牌效助手", NotificationManager.IMPORTANCE_LOW
+            ).apply { description = "悬浮窗牌效分析服务" }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
     private fun buildNotification(): Notification {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("牌效助手运行中")
-                .setContentText("悬浮窗已就绪")
-                .setSmallIcon(R.drawable.ic_tile)
-                .setOngoing(true)
-                .build()
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-                .setContentTitle("牌效助手运行中")
-                .setSmallIcon(R.drawable.ic_tile)
-                .setOngoing(true)
-                .build()
-        }
+        else @Suppress("DEPRECATION") Notification.Builder(this)
+
+        return builder
+            .setContentTitle("牌效助手运行中")
+            .setContentText("悬浮窗已就绪")
+            .setSmallIcon(R.drawable.ic_tile)
+            .setOngoing(true)
+            .build()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun createOverlayWindow() {
-        // 用固定高度避免 WebView WRAP_CONTENT 计算为 0
-        val panelHeight = (400 * resources.displayMetrics.density).toInt()
-        
+        val density = resources.displayMetrics.density
+        val winW = (350 * density).toInt()
+        val winH = (340 * density).toInt()
+
         layoutParams = WindowManager.LayoutParams(
-            (360 * resources.displayMetrics.density).toInt(),
-            panelHeight,
+            winW, winH,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                WindowManager.LayoutParams.TYPE_PHONE,
+            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.END
-            x = 4.dpToPx()
-            y = 80.dpToPx()
+            x = (8 * density).toInt()
+            y = (100 * density).toInt()
         }
 
         webView = WebView(this).apply {
@@ -158,7 +148,7 @@ class OverlayService : Service() {
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    Log.d(TAG, "WebView page loaded")
+                    Log.d(TAG, "WebView loaded")
                 }
             }
             loadUrl("file:///android_asset/overlay.html")
@@ -168,37 +158,23 @@ class OverlayService : Service() {
         windowManager.addView(overlayView, layoutParams)
     }
 
-    private fun setupMediaProjection() {
-        if (mediaProjection == null) {
-            Log.w(TAG, "No MediaProjection available")
-            return
-        }
-        mediaProjection?.registerCallback(object : MediaProjection.Callback() {
-            override fun onStop() {
-                Log.d(TAG, "MediaProjection stopped")
-                cleanupScreenshot()
-            }
-        }, null)
-    }
-
     private fun performScreenshot() {
-        if (mediaProjection == null) {
-            setupMediaProjection()
-        }
-        if (mediaProjection == null) {
-            Log.e(TAG, "MediaProjection not available")
-            runOnWebView("updateStatus('⚠ 请重新打开App授权截图')")
+        val projection = mediaProjection
+        if (projection == null) {
+            Log.w(TAG, "No MediaProjection available")
+            runOnWebView("updateStatus('⚠ 无截图权限，请重启App')")
             Handler(Looper.getMainLooper()).post {
-                Toast.makeText(this@OverlayService, "请重新打开牌效助手授权截图", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@OverlayService, "截图权限未授权，请重新打开App", Toast.LENGTH_LONG).show()
             }
             return
         }
+
+        runOnWebView("updateStatus('📷 截图中...')")
+        overlayView?.visibility = View.INVISIBLE
 
         try {
-            overlayView?.visibility = View.INVISIBLE
-
             imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 1)
-            virtualDisplay = mediaProjection!!.createVirtualDisplay(
+            virtualDisplay = projection.createVirtualDisplay(
                 "screenshot",
                 screenWidth, screenHeight, screenDensity,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
@@ -214,7 +190,7 @@ class OverlayService : Service() {
                         processScreenshot(bitmap)
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Screenshot processing error", e)
+                    Log.e(TAG, "Screenshot error", e)
                 } finally {
                     image?.close()
                     cleanupScreenshot()
@@ -245,21 +221,22 @@ class OverlayService : Service() {
 
     private fun processScreenshot(bitmap: Bitmap) {
         Log.d(TAG, "Processing screenshot ${bitmap.width}x${bitmap.height}")
-
         runOnWebView("updateStatus('🔍 识别中...')")
 
         resultHandler.post {
             try {
                 val labels = tileRecognizer.matchHand(bitmap)
-                Log.d(TAG, "Recognized tiles: $labels")
+                Log.d(TAG, "Recognized: $labels")
 
                 if (labels.isEmpty()) {
+                    overlayView?.visibility = View.VISIBLE
                     runOnWebView("updateStatus('⚠ 未识别到手牌')")
                     return@post
                 }
 
                 val hand = labels.mapNotNull { ShantenAnalyzer.tileToInt(it) }.filter { it >= 0 }
                 if (hand.size < 5) {
+                    overlayView?.visibility = View.VISIBLE
                     runOnWebView("updateStatus('⚠ 手牌不足: ${hand.size}张')")
                     return@post
                 }
@@ -267,6 +244,7 @@ class OverlayService : Service() {
                 sendAnalysisResult(hand.sorted())
             } catch (e: Exception) {
                 Log.e(TAG, "Analysis error", e)
+                overlayView?.visibility = View.VISIBLE
                 runOnWebView("updateStatus('⚠ 分析出错')")
             }
         }
@@ -289,14 +267,15 @@ class OverlayService : Service() {
             obj.put("ukeire_types", c.ukeireTypes)
             obj.put("ukeire_count", c.ukeireCount)
             obj.put("ukeire_tiles", JSONArray(c.ukeireTiles.map { ShantenAnalyzer.intToTile(it) }))
+            obj.put("wait_quality", c.waitQuality)
             obj.put("is_best", i == 0)
             arr.put(obj)
         }
         result.put("candidates", arr)
 
-        val jsonStr = result.toString().replace("\\", "\\\\").replace("'", "\\'")
-        runOnWebView("onAnalyzeResult('$jsonStr')")
-        Log.d(TAG, "Analysis complete: shanten=${sr.shanten}, best=${ShantenAnalyzer.intToTile(candidates[0].tile)}")
+        val jsonStr = result.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+        runOnWebView("onAnalyzeResult(\"$jsonStr\")")
+        Log.d(TAG, "Analysis done: shanten=${sr.shanten}")
     }
 
     private val resultHandler = Handler(Looper.getMainLooper())
@@ -321,9 +300,7 @@ class OverlayService : Service() {
         @JavascriptInterface
         fun screenshot() {
             Log.d(TAG, "JS: screenshot requested")
-            Handler(Looper.getMainLooper()).post {
-                performScreenshot()
-            }
+            Handler(Looper.getMainLooper()).post { performScreenshot() }
         }
 
         @JavascriptInterface
@@ -343,7 +320,7 @@ class OverlayService : Service() {
                     sendAnalysisResult(hand.sorted())
                 } catch (e: Exception) {
                     Log.e(TAG, "Manual analyze error", e)
-                    val msg = e.message?.replace("'", "\\'") ?: "未知错误"
+                    val msg = e.message?.replace("\"", "\\\"") ?: "未知错误"
                     runOnWebView("updateStatus('⚠ 分析出错: $msg')")
                 }
             }
@@ -371,9 +348,7 @@ class OverlayService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
-    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onBind(intent: Intent?) = null
 
@@ -386,6 +361,4 @@ class OverlayService : Service() {
         overlayView?.let { windowManager.removeView(it) }
         super.onDestroy()
     }
-
-    private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
 }
