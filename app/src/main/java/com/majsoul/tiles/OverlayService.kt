@@ -169,9 +169,16 @@ class OverlayService : Service() {
             }
 
             if (projection == null) {
-                log("CAPTURE FAIL: projection null, launching CaptureActivity")
+                log("projection null, launching CaptureActivity")
                 runOnWebView("updateStatus('📋 申请截图权限…')")
                 startActivity(Intent(this@OverlayService, CaptureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                // 权限回来后自动截图
+                h.postDelayed({
+                    if (_resultCode != -1 && _resultData != null) {
+                        log("permission returned, auto-capture")
+                        capture()
+                    }
+                }, 2500)
                 return
             }
 

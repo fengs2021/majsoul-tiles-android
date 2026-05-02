@@ -31,6 +31,9 @@ class CaptureActivity : Activity() {
         if (req == 2001 && code == RESULT_OK && data != null) {
             OverlayService._resultCode = code
             OverlayService._resultData = data
+            Log.d("CaptureActivity", "result stored OK: code=$code")
+        } else {
+            Log.d("CaptureActivity", "denied/cancelled: code=$code")
         }
         finish()
     }
