@@ -200,7 +200,9 @@ class OverlayService : Service() {
 
     private fun performScreenshot() {
         val projection = mediaProjection
+        addLog("performScreenshot: projection=$projection")
         if (projection == null) {
+            addLog("截图失败: mediaProjection == null")
             Log.w(TAG, "No MediaProjection available")
             runOnWebView("updateStatus('⚠ 无截图权限，请重启App')")
             Handler(Looper.getMainLooper()).post {
@@ -209,46 +211,61 @@ class OverlayService : Service() {
             return
         }
 
+        addLog("截图开始: screen=${screenWidth}x${screenHeight} density=$screenDensity")
         runOnWebView("updateStatus('📷 截图中...')")
         overlayView?.visibility = View.INVISIBLE
 
         try {
+            addLog("创建 ImageReader: ${screenWidth}x${screenHeight}")
             imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 1)
+            addLog("创建 VirtualDisplay…")
             virtualDisplay = projection.createVirtualDisplay(
                 "screenshot",
                 screenWidth, screenHeight, screenDensity,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 imageReader!!.surface, null, null
             )
+            addLog("VirtualDisplay 创建成功: $virtualDisplay")
 
             imageReader!!.setOnImageAvailableListener({ reader ->
                 var image: Image? = null
                 try {
+                    addLog("ImageAvailable 回调触发")
                     image = reader.acquireLatestImage()
+                    addLog("acquireLatestImage: ${if (image != null) "${image.width}x${image.height} planes=${image.planes.size}" else "NULL"}")
                     if (image != null) {
+                        val t0 = System.currentTimeMillis()
                         val bitmap = imageToBitmap(image)
+                        addLog("imageToBitmap 完成: ${bitmap.width}x${bitmap.height} 耗时${System.currentTimeMillis() - t0}ms")
                         processScreenshot(bitmap)
                     }
                 } catch (e: Exception) {
+                    addLog("截图异常: ${e.javaClass.simpleName}: ${e.message}")
                     Log.e(TAG, "Screenshot error", e)
+                    e.printStackTrace()
                 } finally {
                     image?.close()
+                    addLog("截图结束, 清理资源")
                     cleanupScreenshot()
                 }
             }, screenshotHandler)
         } catch (e: Exception) {
+            addLog("截图异常: ${e.javaClass.simpleName}: ${e.message}")
             Log.e(TAG, "Screenshot failed", e)
+            e.printStackTrace()
             overlayView?.visibility = View.VISIBLE
-            runOnWebView("updateStatus('⚠ 截图失败')")
+            runOnWebView("updateStatus('⚠ 截图失败: ${e.message}')")
         }
     }
 
     private fun imageToBitmap(image: Image): Bitmap {
+        val t0 = System.currentTimeMillis()
         val planes = image.planes
         val buffer = planes[0].buffer
         val pixelStride = planes[0].pixelStride
         val rowStride = planes[0].rowStride
         val rowPadding = rowStride - pixelStride * image.width
+        addLog("imageToBitmap: planes=${planes.size} pStride=$pixelStride rowStride=$rowStride rowPad=$rowPadding")
 
         val bitmap = Bitmap.createBitmap(
             image.width + rowPadding / pixelStride,
@@ -388,7 +405,26 @@ class OverlayService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        addLog("Service onStartCommand flags=$flags")
+        return START_STICKY
+    }
+
+    // ===== 日志系统 =====
+    private val logBuffer = mutableListOf<String>()
+    private val maxLogLines = 50
+
+    private fun addLog(msg: String) {
+        val ts = android.text.format.DateFormat.format("HH:mm:ss", System.currentTimeMillis())
+        val line = "[$ts] $msg"
+        Log.d(TAG, line)
+        synchronized(logBuffer) {
+            logBuffer.add(line)
+            if (logBuffer.size > maxLogLines) logBuffer.removeAt(0)
+        }
+        // 同步到前端
+        runOnWebView("appendLog('$msg')")
+    }
 
     override fun onBind(intent: Intent?) = null
 

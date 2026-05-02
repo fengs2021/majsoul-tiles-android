@@ -207,6 +207,23 @@
     padding: 10px;
     font-size: 11px;
   }
+
+  /* 日志面板 */
+  .log-panel {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 8px;
+    font-family: monospace;
+    max-height: 60px;
+    overflow-y: auto;
+    opacity: 0.7;
+    flex-shrink: 0;
+    display: none;
+  }
+  .log-panel.show { display: block; }
+  .log-line { padding: 1px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 </style>
 </head>
 <body>
@@ -241,6 +258,12 @@
   <div class="input-row">
     <input class="txt" id="hand-input" placeholder="三万,五万,五万..." autocomplete="off">
     <button class="btn-go" onclick="doAnalyze()">分析</button>
+  </div>
+
+  <!-- 日志面板 -->
+  <div class="log-panel" id="log-panel"></div>
+  <div style="text-align:center;flex-shrink:0;margin-top:-2px;">
+    <span style="font-size:8px;opacity:0.4;cursor:pointer" onclick="toggleLog()">📋 日志</span>
   </div>
 </div>
 
@@ -402,6 +425,19 @@ function onScreenshotResult(jsonStr) {
 
 // ===== 启动 =====
 initPicker();
+
+// ===== 日志 =====
+let logLines = [];
+function appendLog(msg) {
+  logLines.push(msg);
+  if (logLines.length > 30) logLines.shift();
+  const el = document.getElementById('log-panel');
+  el.innerHTML = logLines.map(l => '<div class="log-line">'+l+'</div>').join('');
+  el.scrollTop = el.scrollHeight;
+}
+function toggleLog() {
+  document.getElementById('log-panel').classList.toggle('show');
+}
 </script>
 </body>
 </html>

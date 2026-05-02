@@ -26,7 +26,10 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         statusText = findViewById(R.id.status_text)
 
-        Log.d(TAG, "onCreate, SDK=${Build.VERSION.SDK_INT}")
+        Log.d(TAG, "==================== onCreate ====================")
+        Log.d(TAG, "SDK=${Build.VERSION.SDK_INT} overlay=${
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else "N/A"
+        }")
 
         // 步骤 1：立刻申请悬浮窗权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -66,7 +69,7 @@ class MainActivity : Activity() {
             OVERLAY_PERMISSION -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     val granted = Settings.canDrawOverlays(this)
-                    Log.d(TAG, "overlay permission granted=$granted")
+                    Log.d(TAG, "overlay result: granted=$granted")
                     if (granted) {
                         // 立刻请求截图权限
                         requestScreenCapture()
@@ -80,19 +83,19 @@ class MainActivity : Activity() {
             }
 
             SCREEN_CAPTURE -> {
+                Log.d(TAG, "capture result: code=$resultCode hasData=${data != null}")
                 if (resultCode == RESULT_OK && data != null) {
-                    Log.d(TAG, "screen capture GRANTED")
+                    Log.d(TAG, "capture GRANTED")
                     try {
                         val pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                         OverlayService.mediaProjection = pm.getMediaProjection(resultCode, data)
                         OverlayService.mediaProjectionResultCode = resultCode
                         OverlayService.mediaProjectionData = data
-                        Log.d(TAG, "MediaProjection created: ${OverlayService.mediaProjection}")
+                        Log.d(TAG, "MediaProjection created OK")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Failed to create MediaProjection", e)
+                        Log.e(TAG, "MediaProjection creation failed", e)
                     }
-                } else {
-                    Log.d(TAG, "screen capture DENIED or cancelled")
+                    Log.d(TAG, "capture DENIED/cancelled (code=$resultCode)")
                 }
 
                 launchService()
