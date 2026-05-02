@@ -151,35 +151,65 @@ class OverlayService : Service() {
     }
 
     // ===== 核心：截图 =====
-    private fun capture() {
+    // ===== 权限轮询 =====
+    private var autoCaptureCount = 0
+
+    private fun rebuildProjection() {
+        if (_resultCode == -1 || _resultData == null) return
+        log("rebuilding projection from code=$_resultCode")
         try {
-            // 重建 projection（防止被系统回收）
-            if (projection == null && _resultCode != -1 && _resultData != null) {
-                log("rebuilding MediaProjection from code=$_resultCode")
-                val pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                projection = try {
-                    pm.getMediaProjection(_resultCode, _resultData!!)
-                } catch (e: SecurityException) {
-                    log("SECURITY: ${e.message}")
-                    null
-                } catch (e: Exception) {
-                    log("projection rebuild ERROR: ${e.javaClass.simpleName}: ${e.message}")
-                    null
+            val pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            projection = pm.getMediaProjection(_resultCode, _resultData!!)
+            if (projection != null) {
+                log("projection rebuilt OK")
+            } else {
+                log("projection rebuilt but NULL")
+            }
+        } catch (e: SecurityException) {
+            log("rebuild SECURITY: ${e.message}")
+        } catch (e: Exception) {
+            log("rebuild ERROR: ${e.javaClass.simpleName}: ${e.message}")
+        }
+    }
+
+    private fun scheduleAutoCapture() {
+        autoCaptureCount = 0
+        h.postDelayed(object : Runnable {
+            override fun run() {
+                autoCaptureCount++
+                log("auto-capture poll #$autoCaptureCount")
+                if (_resultCode != -1 && _resultData != null) {
+                    log("permission detected! auto-capturing")
+                    capture()
+                } else if (autoCaptureCount < 15) {
+                    h.postDelayed(this, 1000)  // 每秒检查一次，最多15秒
+                } else {
+                    log("auto-capture timeout after 15s")
+                    runOnWebView("updateStatus('⚠ 截图权限未授权')")
                 }
             }
+        }, 1500)  // 第一步等1.5秒，之后每秒
+    }
+
+    private fun capture() {
+        try {
+            // 确保 projection 可用
+            if (projection == null) rebuildProjection()
 
             if (projection == null) {
-                log("projection null, launching CaptureActivity")
-                runOnWebView("updateStatus('📋 申请截图权限…')")
-                startActivity(Intent(this@OverlayService, CaptureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                // 权限回来后自动截图
-                h.postDelayed({
-                    if (_resultCode != -1 && _resultData != null) {
-                        log("permission returned, auto-capture")
-                        capture()
-                    }
-                }, 2500)
-                return
+                if (_resultCode != -1 && _resultData != null && projection == null) {
+                    // 有凭证，尝试重建
+                    log("has stored result, rebuilding projection")
+                    rebuildProjection()
+                }
+                if (projection == null) {
+                    log("no permission, launching CaptureActivity")
+                    runOnWebView("updateStatus('📋 申请截图权限…')")
+                    startActivity(Intent(this@OverlayService, CaptureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    // 轮询等待权限回来
+                    scheduleAutoCapture()
+                    return
+                }
             }
 
             log("capture start: ${screenW}x${screenH}")
