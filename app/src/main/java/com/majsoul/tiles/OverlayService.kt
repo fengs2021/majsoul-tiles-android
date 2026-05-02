@@ -203,12 +203,14 @@ class OverlayService : Service() {
         val projection = mediaProjection
         addLog("performScreenshot: projection=$projection")
         if (projection == null) {
-            addLog("截图失败: mediaProjection == null")
-            Log.w(TAG, "No MediaProjection available")
-            runOnWebView("updateStatus('⚠ 无截图权限，请重启App')")
-            Handler(Looper.getMainLooper()).post {
-                Toast.makeText(this@OverlayService, "截图权限未授权，请重新打开App", Toast.LENGTH_LONG).show()
+            addLog("截图失败: mediaProjection == null, 启动权限请求")
+            Log.w(TAG, "No MediaProjection, launching CaptureActivity")
+            runOnWebView("updateStatus('📋 请求截图权限…')")
+            // 启动 CaptureActivity 申请截图权限
+            val intent = Intent(this@OverlayService, CaptureActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            startActivity(intent)
             return
         }
 
