@@ -63,6 +63,7 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        addLog("Service onCreate projection=${mediaProjection != null}")
         Log.d(TAG, "onCreate, projection=${mediaProjection != null}")
 
         createNotificationChannel()
@@ -77,18 +78,18 @@ class OverlayService : Service() {
         screenHeight = metrics.heightPixels
         screenDensity = metrics.densityDpi
 
-        registerProjectionCallback()
         createOverlayWindow()
     }
 
-    private fun registerProjectionCallback() {
-        mediaProjection?.registerCallback(object : MediaProjection.Callback() {
-            override fun onStop() {
-                Log.d(TAG, "MediaProjection stopped by system")
-                mediaProjection = null
-                runOnWebView("updateStatus('⚠ 截图权限失效，请重启App')")
-            }
-        }, Handler(Looper.getMainLooper()))
+    private var callbackRegistered = 0
+    private val projectionCallback = object : MediaProjection.Callback() {
+        override fun onStop() {
+            addLog("MediaProjection stopped by system")
+            Log.d(TAG, "MediaProjection stopped by system")
+            mediaProjection = null
+            callbackRegistered = 0
+            runOnWebView("updateStatus('⚠ 截图权限失效，请重启App')")
+        }
     }
 
     private fun createNotificationChannel() {
@@ -117,7 +118,7 @@ class OverlayService : Service() {
     private fun createOverlayWindow() {
         val density = resources.displayMetrics.density
         val winW = (260 * density).toInt()
-        val winH = (270 * density).toInt()
+        val winH = (360 * density).toInt()
 
         lp = WindowManager.LayoutParams(
             winW, winH,
@@ -216,6 +217,12 @@ class OverlayService : Service() {
         overlayView?.visibility = View.INVISIBLE
 
         try {
+            // Android 要求必须先注册回调再创建 VirtualDisplay
+            if (callbackRegistered != 1) {
+                projection.registerCallback(projectionCallback, screenshotHandler)
+                callbackRegistered = 1
+                addLog("MediaProjection callback 已注册")
+            }
             addLog("创建 ImageReader: ${screenWidth}x${screenHeight}")
             imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 1)
             addLog("创建 VirtualDisplay…")
