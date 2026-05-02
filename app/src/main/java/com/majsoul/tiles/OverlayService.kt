@@ -122,8 +122,8 @@ class OverlayService : Service() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun createOverlayWindow() {
         layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
+            (360 * screenDensity / 160f).toInt(),  // 固定宽度 ~360dp
+            WindowManager.LayoutParams.WRAP_CONTENT, // 自适应高度
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else
@@ -133,10 +133,9 @@ class OverlayService : Service() {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.END or Gravity.TOP
-            x = 0
-            y = 100
-            width = (380 * screenDensity / 160f).toInt()
+            gravity = Gravity.TOP or Gravity.END
+            x = 4.dpToPx()
+            y = 80.dpToPx()
         }
 
         webView = WebView(this).apply {
@@ -189,7 +188,10 @@ class OverlayService : Service() {
         }
         if (mediaProjection == null) {
             Log.e(TAG, "MediaProjection not available")
-            runOnWebView("updateStatus('⚠ 截图权限未授权')")
+            runOnWebView("updateStatus('⚠ 请重新打开App授权截图')")
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(this@OverlayService, "请重新打开牌效助手授权截图", Toast.LENGTH_LONG).show()
+            }
             return
         }
 
@@ -385,4 +387,6 @@ class OverlayService : Service() {
         overlayView?.let { windowManager.removeView(it) }
         super.onDestroy()
     }
+
+    private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
 }

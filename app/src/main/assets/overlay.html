@@ -2,205 +2,395 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
 <title>牌效助手</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: rgba(34, 139, 34, 0.78);
-    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    color: #fff;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 8px 10px;
-    font-size: 13px;
-    line-height: 1.5;
-    min-height: 100vh;
-    border-radius: 12px;
-    border: 2px solid rgba(255,255,255,0.3);
+  :root {
+    --bg: #228B22;
+    --panel: rgba(30, 100, 30, 0.88);
+    --border: #3a7a3a;
+    --text: #e8f5e8;
+    --accent: #4cff4c;
+    --tile-bg: rgba(0,0,0,0.3);
+    --card-bg: rgba(0,0,0,0.25);
+    --best-glow: rgba(80,255,80,0.3);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background: transparent;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow: hidden;
+    -webkit-text-size-adjust: none;
     touch-action: manipulation;
   }
-  .header {
+  /* 紧凑面板容器 */
+  .panel {
+    background: var(--panel);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 6px 8px;
+    max-height: 45vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  /* 顶部栏 */
+  .topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
-  }
-  .title {
-    font-size: 16px;
-    font-weight: 700;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-  }
-  .btn-row {
-    display: flex;
     gap: 6px;
+    flex-shrink: 0;
   }
-  .btn {
-    background: rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.4);
-    color: #fff;
-    padding: 6px 12px;
-    border-radius: 18px;
+  .topbar .title {
     font-size: 13px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    backdrop-filter: blur(4px);
-    transition: background 0.2s;
-  }
-  .btn:active { background: rgba(255,255,255,0.35); }
-  .btn.primary {
-    background: rgba(255,255,255,0.35);
     font-weight: 700;
+    color: var(--accent);
   }
-  .status {
-    text-align: center;
-    padding: 4px 8px;
-    margin-bottom: 6px;
-    font-size: 12px;
-    background: rgba(0,0,0,0.2);
-    border-radius: 10px;
-    color: rgba(255,255,255,0.85);
-  }
-  .card {
-    background: rgba(0,0,0,0.25);
-    border-radius: 10px;
-    padding: 8px 10px;
-    margin-bottom: 6px;
-    border: 1px solid rgba(255,255,255,0.15);
-  }
-  .card-title {
-    font-size: 12px;
-    color: rgba(255,255,255,0.7);
-    margin-bottom: 2px;
-  }
-  .best-discard {
-    font-size: 28px;
-    font-weight: 900;
-    text-align: center;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
-    padding: 6px 0;
-    color: #FFD700;
-  }
-  .ukeire {
-    font-size: 12px;
-    text-align: center;
-    color: rgba(255,255,255,0.8);
-  }
-  .candidate {
+  .topbar .actions {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 5px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    font-size: 13px;
+    gap: 4px;
   }
-  .candidate:last-child { border-bottom: none; }
-  .cand-tile { font-weight: 700; font-size: 15px; }
-  .cand-info { font-size: 11px; color: rgba(255,255,255,0.7); }
-  .cand-best { color: #FFD700; }
-  .toggle-label {
+  .dot { width:6px; height:6px; background:var(--accent); border-radius:50%; flex-shrink:0; animation:blink 2s infinite; }
+  @keyframes blink { 50% { opacity:0.3; } }
+
+  .btn-icon {
+    background: var(--tile-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .btn-icon:active { background: var(--accent); color: #0a3a0a; }
+  .btn-icon.on { background: var(--accent); color: #0a3a0a; border-color: var(--accent); }
+
+  /* 状态行 */
+  .status-line {
+    font-size: 10px;
+    opacity: 0.7;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* 手牌 */
+  .hand-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .tile-tag {
+    background: var(--tile-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 28px;
+    text-align: center;
+  }
+  .tile-tag.best { border-color:var(--accent); background:var(--best-glow); color:var(--accent); box-shadow:0 0 6px rgba(80,255,80,0.25); }
+
+  /* 推荐卡 */
+  .rec-card {
+    background: var(--card-bg);
+    border: 1.5px solid var(--accent);
+    border-radius: 8px;
+    padding: 6px 8px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .rec-card .rec-label { font-size:10px; opacity:0.7; }
+  .rec-card .rec-tile {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--accent);
+    padding: 2px 0;
+  }
+  .rec-card .rec-info { font-size: 10px; opacity:0.85; }
+
+  /* 候选列表 */
+  .cand-row {
     display: flex;
     align-items: center;
     gap: 4px;
+    background: var(--card-bg);
+    border-radius: 5px;
+    padding: 3px 6px;
     font-size: 11px;
-    color: rgba(255,255,255,0.7);
   }
-  .toggle {
-    width: 36px; height: 20px;
-    background: rgba(255,255,255,0.25);
-    border-radius: 10px;
-    position: relative;
+  .cand-row.best { border:1px solid var(--accent); background:var(--best-glow); }
+  .cand-row .rank { width:14px; font-weight:700; color:var(--accent); font-size:10px; }
+  .cand-row .ctile { font-weight:700; font-size:13px; min-width:32px; }
+  .cand-row .cinfo { flex:1; font-size:10px; opacity:0.8; }
+  .cand-row .cukeire { font-weight:600; color:var(--accent); }
+  .badge { font-size:9px; background:var(--accent); color:#0a3a0a; padding:1px 5px; border-radius:8px; font-weight:700; }
+
+  /* 选牌区 */
+  .picker {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .picker-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+  .picker .suit-label {
+    font-size: 9px;
+    opacity: 0.5;
+    min-width: 18px;
+    text-align: right;
+    line-height: 18px;
+  }
+  .pick-tile {
+    background: var(--tile-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 10px;
     cursor: pointer;
-    transition: background 0.2s;
+    user-select: none;
+    transition: all 0.1s;
+    line-height: 16px;
   }
-  .toggle.on { background: #4CAF50; }
-  .toggle::after {
-    content: '';
-    width: 16px; height: 16px;
-    background: #fff;
-    border-radius: 50%;
-    position: absolute;
-    top: 2px; left: 2px;
-    transition: left 0.2s;
+  .pick-tile:active { background: var(--accent); color:#0a3a0a; }
+  .pick-tile.sel { background: var(--accent); color:#0a3a0a; border-color: var(--accent); }
+
+  .input-row {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
   }
-  .toggle.on::after { left: 18px; }
+  .input-row .txt {
+    flex: 1;
+    background: var(--tile-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 6px;
+    border-radius: 5px;
+    font-size: 11px;
+    outline: none;
+    min-width: 0;
+  }
+  .input-row .txt:focus { border-color: var(--accent); }
+  .btn-go {
+    background: var(--accent);
+    color: #0a3a0a;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-go:active { opacity:0.7; }
+
+  .empty-hint {
+    text-align: center;
+    opacity: 0.5;
+    padding: 10px;
+    font-size: 11px;
+  }
 </style>
 </head>
 <body>
-
-<div class="header">
-  <span class="title">🀄 牌效助手</span>
-  <div class="btn-row">
-    <button class="btn primary" onclick="triggerScreenshot()">📷 分析</button>
+<div class="panel">
+  <div class="topbar">
+    <span class="dot"></span>
+    <span class="title">🀄 牌效助手</span>
+    <div class="actions">
+      <button class="btn-icon" id="btn-screenshot" onclick="doScreenshot()">📷</button>
+      <button class="btn-icon" id="btn-auto" onclick="toggleAuto()">⏱ 自动</button>
+    </div>
   </div>
-</div>
 
-<div class="header" style="margin-top: -2px;">
-  <label class="toggle-label">
-    <div class="toggle" id="autoToggle" onclick="toggleAuto()"></div>
-    <span>自动分析(5s)</span>
-  </label>
-</div>
+  <div class="status-line" id="status">选牌或截图开始分析</div>
 
-<div class="status" id="status">等待分析...</div>
-
-<div id="results" style="display:none;">
-  <div class="card">
-    <div class="best-discard" id="bestDiscard">—</div>
-    <div class="ukeire" id="ukeire"></div>
+  <!-- 结果区 -->
+  <div id="result-area" style="display:none">
+    <div class="hand-row" id="hand-display"></div>
+    <div class="rec-card">
+      <div class="rec-label">🏆 推荐切牌</div>
+      <div class="rec-tile" id="best-tile">--</div>
+      <div class="rec-info" id="rec-info"></div>
+    </div>
+    <div id="candidates"></div>
   </div>
-  <div id="candidateList"></div>
+
+  <div class="empty-hint" id="empty-hint">📷 截图 | 或选牌分析</div>
+
+  <!-- 快速选牌 -->
+  <div class="picker" id="picker"></div>
+
+  <div class="input-row">
+    <input class="txt" id="hand-input" placeholder="三万,五万,五万..." autocomplete="off">
+    <button class="btn-go" onclick="doAnalyze()">分析</button>
+  </div>
 </div>
 
 <script>
-let autoEnabled = false;
+// ===== 常量 =====
+const TILE_NAMES = [
+  '一万','二万','三万','四万','五万','六万','七万','八万','九万',
+  '一筒','二筒','三筒','四筒','五筒','六筒','七筒','八筒','九筒',
+  '一索','二索','三索','四索','五索','六索','七索','八索','九索',
+  '東','南','西','北','白','發','中',
+];
+const SUITS = [
+  {label:'万', tiles: TILE_NAMES.slice(0,9)},
+  {label:'筒', tiles: TILE_NAMES.slice(9,18)},
+  {label:'索', tiles: TILE_NAMES.slice(18,27)},
+  {label:'字', tiles: TILE_NAMES.slice(27,34)},
+];
 
-function triggerScreenshot() {
-  updateStatus('📸 截图中...');
-  try { Android.screenshot(); } catch(e) {
-    updateStatus('⚠ 未连接');
+let selected = [];
+let lastResult = null;
+let autoOn = false;
+
+// ===== 初始化选牌区 =====
+function initPicker() {
+  const p = document.getElementById('picker');
+  SUITS.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'picker-row';
+    const label = document.createElement('span');
+    label.className = 'suit-label';
+    label.textContent = s.label;
+    row.appendChild(label);
+    s.tiles.forEach(name => {
+      const el = document.createElement('span');
+      el.className = 'pick-tile';
+      el.textContent = name;
+      el.onclick = function() { toggleTile(name, el); };
+      row.appendChild(el);
+    });
+    p.appendChild(row);
+  });
+}
+
+function toggleTile(name, el) {
+  const idx = selected.indexOf(name);
+  if (idx >= 0) {
+    selected.splice(idx, 1);
+    el.classList.remove('sel');
+  } else {
+    if (selected.length >= 14) { setStatus('最多14张'); return; }
+    selected.push(name);
+    el.classList.add('sel');
   }
+  document.getElementById('hand-input').value = selected.join(',');
+  if (selected.length >= 13 && selected.length <= 14) doAnalyze();
+}
+
+// ===== 截图 =====
+function doScreenshot() {
+  setStatus('📷 截图中...');
+  try { Android.screenshot(); } catch(e) { setStatus('需授权截图权限'); }
 }
 
 function toggleAuto() {
-  autoEnabled = !autoEnabled;
-  document.getElementById('autoToggle').classList.toggle('on', autoEnabled);
-  try { Android.setAutoScreenshot(autoEnabled); } catch(e) {}
-  updateStatus(autoEnabled ? '🔄 自动分析开启' : '等待分析...');
+  autoOn = !autoOn;
+  const btn = document.getElementById('btn-auto');
+  btn.textContent = autoOn ? '⏱ 停止' : '⏱ 自动';
+  btn.className = autoOn ? 'btn-icon on' : 'btn-icon';
+  try { Android.setAutoScreenshot(autoOn); } catch(e) {}
+  setStatus(autoOn ? '自动截图: 每5秒' : '手动模式');
+}
+
+// ===== 分析 =====
+function doAnalyze() {
+  const input = document.getElementById('hand-input').value.trim();
+  const tiles = input ? input.split(/[,，\s]+/).filter(Boolean) : selected;
+  if (tiles.length < 5) { setStatus('至少5张牌'); return; }
+
+  setStatus('分析中...');
+  try {
+    Android.analyze(JSON.stringify(tiles));
+  } catch(e) {
+    setStatus('连接失败');
+  }
+}
+
+// ===== 接收分析结果 =====
+function onAnalyzeResult(jsonStr) {
+  try {
+    const data = JSON.parse(jsonStr);
+    lastResult = data;
+    render(data);
+    setStatus(data.shanten === 0 ? '🎯 听牌!' : '⏳ '+data.shanten+'向听');
+  } catch(e) {
+    setStatus('解析结果失败');
+  }
+}
+
+function render(data) {
+  document.getElementById('empty-hint').style.display = 'none';
+  document.getElementById('result-area').style.display = 'flex';
+
+  const bestTile = data.best_discard;
+  // 手牌
+  const handDiv = document.getElementById('hand-display');
+  handDiv.innerHTML = selected.map(name => {
+    const cls = (name === bestTile) ? 'tile-tag best' : 'tile-tag';
+    return '<span class="'+cls+'">'+name+'</span>';
+  }).join('');
+
+  // 推荐
+  document.getElementById('best-tile').textContent = bestTile || '--';
+  const best = data.candidates && data.candidates[0];
+  const shantenStr = data.shanten === 0 ? '🎯 听牌' : '⏳ '+data.shanten+'向听';
+  const pd = data.shanten_detail || {};
+  document.getElementById('rec-info').innerHTML =
+    shantenStr +
+    ' | 进张 <b>'+ (best ? best.ukeire_types : 0) +'</b>种/'+
+    '<b>'+ (best ? best.ukeire_count : 0) +'</b>枚' +
+    (pd.pair ? ' | 雀头✓' : '');
+
+  // 候选
+  const candDiv = document.getElementById('candidates');
+  candDiv.innerHTML = '';
+  (data.candidates || []).slice(0, 5).forEach((c, i) => {
+    const cls = c.is_best ? 'cand-row best' : 'cand-row';
+    candDiv.innerHTML += '<div class="'+cls+'">'+
+      '<span class="rank">'+(i+1)+'</span>'+
+      '<span class="ctile">'+c.tile+'</span>'+
+      '<span class="cinfo">打后'+(c.shanten_after===0?'听牌':c.shanten_after+'向听')+'</span>'+
+      '<span class="cukeire">'+c.ukeire_types+'种/'+c.ukeire_count+'枚</span>'+
+      (c.is_best ? '<span class="badge">BEST</span>' : '')+
+    '</div>';
+  });
 }
 
 function updateStatus(msg) {
   document.getElementById('status').textContent = msg;
 }
-
-function onAnalyzeResult(jsonStr) {
-  try {
-    var data = JSON.parse(jsonStr);
-    var results = document.getElementById('results');
-    results.style.display = 'block';
-
-    document.getElementById('bestDiscard').textContent = data.best_discard || '?';
-    var shanten = data.shanten >= 0 ? data.shanten + '向听' : '听牌!';
-    document.getElementById('ukeire').textContent = shanten;
-
-    var list = document.getElementById('candidateList');
-    list.innerHTML = '';
-    (data.candidates || []).slice(0, 6).forEach(function(c) {
-      var div = document.createElement('div');
-      div.className = 'candidate';
-      var cls = c.is_best ? ' cand-best' : '';
-      div.innerHTML = '<span class="cand-tile' + cls + '">' + c.tile + '</span>' +
-        '<span class="cand-info">打后' + c.shanten_after + '向听 · 进张' + c.ukeire_count + '枚</span>';
-      list.appendChild(div);
-    });
-
-    updateStatus('✅ 分析完成 · ' + shanten + ' · 最佳切牌: ' + data.best_discard);
-  } catch(e) {
-    updateStatus('⚠ 解析错误');
-  }
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+  // 同时尝试调用 status 回调
+  updateStatus(msg);
 }
+
+// ===== 截图结果回调 =====
+function onScreenshotResult(jsonStr) {
+  setStatus('🔍 识别完成');
+}
+
+// ===== 启动 =====
+initPicker();
 </script>
 </body>
 </html>
