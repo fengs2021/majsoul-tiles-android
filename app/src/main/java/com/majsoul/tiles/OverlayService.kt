@@ -33,6 +33,8 @@ class OverlayService : Service() {
 
         var mediaProjectionResultCode: Int = -1
         var mediaProjectionData: Intent? = null
+        // 由 MainActivity 直接注入已创建好的 MediaProjection
+        var mediaProjection: MediaProjection? = null
     }
 
     // 窗口管理
@@ -43,8 +45,7 @@ class OverlayService : Service() {
     // WebView
     private lateinit var webView: WebView
 
-    // 截图
-    private var mediaProjection: MediaProjection? = null
+    // 截图（mediaProjection 在 companion object 中，由 MainActivity 注入）
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private var screenWidth = 0
@@ -165,15 +166,10 @@ class OverlayService : Service() {
     }
 
     private fun setupMediaProjection() {
-        if (mediaProjectionResultCode == -1 || mediaProjectionData == null) {
-            Log.w(TAG, "No MediaProjection data available yet")
+        if (mediaProjection == null) {
+            Log.w(TAG, "No MediaProjection available")
             return
         }
-
-        val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        mediaProjection = projectionManager.getMediaProjection(
-            mediaProjectionResultCode, mediaProjectionData!!
-        )
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() {
                 Log.d(TAG, "MediaProjection stopped")
