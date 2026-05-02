@@ -119,7 +119,7 @@ class OverlayService : Service() {
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true
-            settings.allowFileAccess = true; setSupportZoom(false); builtInZoomControls = false
+            settings.allowFileAccess = true
             setBackgroundColor(Color.TRANSPARENT); setLayerType(View.LAYER_TYPE_HARDWARE, null)
             addJavascriptInterface(Bridge(), "Android")
             webViewClient = object : WebViewClient() {
