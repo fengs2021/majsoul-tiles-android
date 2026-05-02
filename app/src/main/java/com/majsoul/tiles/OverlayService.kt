@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.*
 import android.content.Intent
 import android.graphics.*
+import android.view.MotionEvent
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
@@ -20,6 +21,7 @@ import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.abs
 
 class OverlayService : Service() {
 
@@ -111,25 +113,24 @@ class OverlayService : Service() {
             .build()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun createOverlayWindow() {
         val density = resources.displayMetrics.density
-        val winW = (350 * density).toInt()
-        val winH = (340 * density).toInt()
+        val winW = (260 * density).toInt()
+        val winH = (270 * density).toInt()
 
-        val lp = WindowManager.LayoutParams(
+        lp = WindowManager.LayoutParams(
             winW, winH,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            x = (8 * density).toInt()
-            y = (100 * density).toInt()
+            gravity = Gravity.TOP or Gravity.START
+            x = (60 * density).toInt()
+            y = (120 * density).toInt()
         }
 
         webView = WebView(this).apply {
@@ -152,10 +153,49 @@ class OverlayService : Service() {
                 }
             }
             loadUrl("file:///android_asset/overlay.html")
+
+            // 拖动支持
+            setOnTouchListener(dragListener)
         }
 
         overlayView = webView
         windowManager.addView(overlayView, lp)
+    }
+
+    // ===== 拖动逻辑 =====
+    private lateinit var lp: WindowManager.LayoutParams
+    private var dragStartX = 0f
+    private var dragStartY = 0f
+    private var winStartX = 0
+    private var winStartY = 0
+    private var isDragging = false
+
+    private val dragListener = View.OnTouchListener { view, event ->
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                dragStartX = event.rawX
+                dragStartY = event.rawY
+                winStartX = lp.x
+                winStartY = lp.y
+                isDragging = false
+                false // 不消费，让 WebView 也能收到事件
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.rawX - dragStartX
+                val dy = event.rawY - dragStartY
+                if (abs(dx) > 10 || abs(dy) > 10) {
+                    isDragging = true
+                    lp.x = (winStartX + dx).toInt()
+                    lp.y = (winStartY + dy).toInt()
+                    windowManager.updateViewLayout(overlayView, lp)
+                }
+                isDragging
+            }
+            MotionEvent.ACTION_UP -> {
+                if (isDragging) true else false
+            }
+            else -> false
+        }
     }
 
     private fun performScreenshot() {
