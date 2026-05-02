@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">牌效助手</string>
+    <string name="service_desc">悬浮窗牌效分析服务</string>
+</resources>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>牌效助手</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: rgba(34, 139, 34, 0.78);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #fff;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    border-radius: 12px;
+    border: 2px solid rgba(255,255,255,0.3);
+    touch-action: manipulation;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .title {
+    font-size: 16px;
+    font-weight: 700;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .btn-row {
+    display: flex;
+    gap: 6px;
+  }
+  .btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 18px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    backdrop-filter: blur(4px);
+    transition: background 0.2s;
+  }
+  .btn:active { background: rgba(255,255,255,0.35); }
+  .btn.primary {
+    background: rgba(255,255,255,0.35);
+    font-weight: 700;
+  }
+  .status {
+    text-align: center;
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 10px;
+    color: rgba(255,255,255,0.85);
+  }
+  .card {
+    background: rgba(0,0,0,0.25);
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .card-title {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 2px;
+  }
+  .best-discard {
+    font-size: 28px;
+    font-weight: 900;
+    text-align: center;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    padding: 6px 0;
+    color: #FFD700;
+  }
+  .ukeire {
+    font-size: 12px;
+    text-align: center;
+    color: rgba(255,255,255,0.8);
+  }
+  .candidate {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 13px;
+  }
+  .candidate:last-child { border-bottom: none; }
+  .cand-tile { font-weight: 700; font-size: 15px; }
+  .cand-info { font-size: 11px; color: rgba(255,255,255,0.7); }
+  .cand-best { color: #FFD700; }
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+  }
+  .toggle {
+    width: 36px; height: 20px;
+    background: rgba(255,255,255,0.25);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle.on { background: #4CAF50; }
+  .toggle::after {
+    content: '';
+    width: 16px; height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px; left: 2px;
+    transition: left 0.2s;
+  }
+  .toggle.on::after { left: 18px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="title">🀄 牌效助手</span>
+  <div class="btn-row">
+    <button class="btn primary" onclick="triggerScreenshot()">📷 分析</button>
+  </div>
+</div>
+
+<div class="header" style="margin-top: -2px;">
+  <label class="toggle-label">
+    <div class="toggle" id="autoToggle" onclick="toggleAuto()"></div>
+    <span>自动分析(5s)</span>
+  </label>
+</div>
+
+<div class="status" id="status">等待分析...</div>
+
+<div id="results" style="display:none;">
+  <div class="card">
+    <div class="best-discard" id="bestDiscard">—</div>
+    <div class="ukeire" id="ukeire"></div>
+  </div>
+  <div id="candidateList"></div>
+</div>
+
+<script>
+let autoEnabled = false;
+
+function triggerScreenshot() {
+  updateStatus('📸 截图中...');
+  try { Android.screenshot(); } catch(e) {
+    updateStatus('⚠ 未连接');
+  }
+}
+
+function toggleAuto() {
+  autoEnabled = !autoEnabled;
+  document.getElementById('autoToggle').classList.toggle('on', autoEnabled);
+  try { Android.setAutoScreenshot(autoEnabled); } catch(e) {}
+  updateStatus(autoEnabled ? '🔄 自动分析开启' : '等待分析...');
+}
+
+function updateStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+function onAnalyzeResult(jsonStr) {
+  try {
+    var data = JSON.parse(jsonStr);
+    var results = document.getElementById('results');
+    results.style.display = 'block';
+
+    document.getElementById('bestDiscard').textContent = data.best_discard || '?';
+    var shanten = data.shanten >= 0 ? data.shanten + '向听' : '听牌!';
+    document.getElementById('ukeire').textContent = shanten;
+
+    var list = document.getElementById('candidateList');
+    list.innerHTML = '';
+    (data.candidates || []).slice(0, 6).forEach(function(c) {
+      var div = document.createElement('div');
+      div.className = 'candidate';
+      var cls = c.is_best ? ' cand-best' : '';
+      div.innerHTML = '<span class="cand-tile' + cls + '">' + c.tile + '</span>' +
+        '<span class="cand-info">打后' + c.shanten_after + '向听 · 进张' + c.ukeire_count + '枚</span>';
+      list.appendChild(div);
+    });
+
+    updateStatus('✅ 分析完成 · ' + shanten + ' · 最佳切牌: ' + data.best_discard);
+  } catch(e) {
+    updateStatus('⚠ 解析错误');
+  }
+}
+</script>
+</body>
+</html>
