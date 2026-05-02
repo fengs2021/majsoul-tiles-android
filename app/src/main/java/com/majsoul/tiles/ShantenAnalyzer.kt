@@ -9,7 +9,7 @@ package com.majsoul.tiles
 object ShantenAnalyzer {
 
     private val _1_9 = listOf("一", "二", "三", "四", "五", "六", "七", "八", "九")
-    private val honors = listOf("東", "南", "西", "北", "白", "發", "中")
+    val honors = listOf("東", "南", "西", "北", "白", "發", "中")
 
     private val TILE_MAP: Map<String, Int> = buildMap {
         for (i in 1..9) {
@@ -37,14 +37,22 @@ object ShantenAnalyzer {
         val ukeireTiles: List<Int>
     )
 
+    data class ShantenResult(
+        val shanten: Int,
+        val mentsu: Int,
+        val tatsu: Int,
+        val hasPair: Boolean
+    ) {
+        fun toMap(): Map<String, Any> = mapOf(
+            "mentsu" to mentsu,
+            "tatsu" to tatsu,
+            "pair" to hasPair
+        )
+    }
+
     // ===== 向听数计算 =====
 
-    data class ShantenResult(val shanten: Int, val mentsu: Int, val tatsu: Int, val hasPair: Boolean)
-
     fun calcShanten(hand: List<Int>): ShantenResult {
-        val counts = IntArray(34) { hand.count { it == _idx } }.also {
-            for (t in hand) it[t] = it[t]
-        }
         val countsFixed = IntArray(34)
         hand.forEach { countsFixed[it]++ }
 
@@ -55,7 +63,9 @@ object ShantenAnalyzer {
 
         // 找所有可能的雀头候选
         val pairCands = mutableListOf<Int?>()
-        countsFixed.forEachIndexed { i, c -> if (c >= 2) pairCands.add(i) }
+        for (i in 0..33) {
+            if (countsFixed[i] >= 2) pairCands.add(i)
+        }
         pairCands.add(null) // 无雀头
 
         for (pair in pairCands) {
@@ -90,7 +100,7 @@ object ShantenAnalyzer {
 
         // 先找刻子
         for (t in 0..33) {
-            while (r.getOrElse(t) { 0 } >= 3) {
+            while (r[t] >= 3) {
                 r[t] -= 3
                 mentsu++
             }
@@ -99,10 +109,7 @@ object ShantenAnalyzer {
         // 再找顺子（只对万/筒/索）
         for (offset in listOf(0, 9, 18)) {
             for (start in offset until offset + 7) {
-                while (r.getOrElse(start) { 0 } >= 1 &&
-                    r.getOrElse(start + 1) { 0 } >= 1 &&
-                    r.getOrElse(start + 2) { 0 } >= 1
-                ) {
+                while (r[start] >= 1 && r[start + 1] >= 1 && r[start + 2] >= 1) {
                     r[start]--
                     r[start + 1]--
                     r[start + 2]--
@@ -117,14 +124,11 @@ object ShantenAnalyzer {
     private fun applyMentsu(counts: IntArray): IntArray {
         val r = counts.copyOf()
         for (t in 0..33) {
-            while (r.getOrElse(t) { 0 } >= 3) r[t] -= 3
+            while (r[t] >= 3) r[t] -= 3
         }
         for (offset in listOf(0, 9, 18)) {
             for (start in offset until offset + 7) {
-                while (r.getOrElse(start) { 0 } >= 1 &&
-                    r.getOrElse(start + 1) { 0 } >= 1 &&
-                    r.getOrElse(start + 2) { 0 } >= 1
-                ) {
+                while (r[start] >= 1 && r[start + 1] >= 1 && r[start + 2] >= 1) {
                     r[start]--
                     r[start + 1]--
                     r[start + 2]--
@@ -140,7 +144,7 @@ object ShantenAnalyzer {
 
         // 对子
         for (t in 0..33) {
-            if (r.getOrElse(t) { 0 } >= 2) {
+            if (r[t] >= 2) {
                 r[t] -= 2
                 tatsu++
             }
@@ -148,7 +152,7 @@ object ShantenAnalyzer {
 
         // 搭子（万/筒/索）
         for (offset in listOf(0, 9, 18)) {
-            val inSuit = (offset until offset + 9).filter { r.getOrElse(it) { 0 } > 0 }.toMutableList()
+            val inSuit = (offset until offset + 9).filter { r[it] > 0 }.toMutableList()
             var changed = true
             while (changed) {
                 changed = false
@@ -161,7 +165,7 @@ object ShantenAnalyzer {
                         tatsu++
                         changed = true
                         inSuit.clear()
-                        inSuit.addAll((offset until offset + 9).filter { r.getOrElse(it) { 0 } > 0 })
+                        inSuit.addAll((offset until offset + 9).filter { r[it] > 0 })
                         break
                     }
                 }
@@ -173,7 +177,8 @@ object ShantenAnalyzer {
     // ===== 进张数计算 =====
 
     fun calcUkeire(hand: List<Int>, discard: Int): Triple<Int, Int, List<Int>> {
-        val remaining = hand.filter { it != discard }.toMutableList()
+        val remaining = hand.toMutableList()
+        remaining.remove(discard)
         if (remaining.isEmpty()) return Triple(0, 0, emptyList())
 
         val shantenAfter = calcShanten(remaining).shanten
@@ -217,11 +222,7 @@ object ShantenAnalyzer {
     }
 
     fun isAgari(hand: List<Int>): Boolean {
-        // 14张牌，4面子+1雀头 = 和牌
         if (hand.size % 3 != 2) return false
         return calcShanten(hand).shanten <= -1
     }
-
-    private fun IntArray.getOrElse(i: Int, default: Int) =
-        if (i in indices) this[i] else default
 }

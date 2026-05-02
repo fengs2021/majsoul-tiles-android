@@ -21,7 +21,6 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
 class OverlayService : Service() {
@@ -64,9 +63,8 @@ class OverlayService : Service() {
         }
     }
 
-    // 识别器 & 分析器
+    // 识别器（通过 Context 加载模板）
     private lateinit var tileRecognizer: TileRecognizer
-    private lateinit var shantenAnalyzer: ShantenAnalyzer
 
     override fun onCreate() {
         super.onCreate()
@@ -77,7 +75,6 @@ class OverlayService : Service() {
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         tileRecognizer = TileRecognizer(this)
-        shantenAnalyzer = ShantenAnalyzer()
 
         // 获取屏幕参数
         val metrics = DisplayMetrics()
@@ -142,7 +139,6 @@ class OverlayService : Service() {
             width = (380 * screenDensity / 160f).toInt()
         }
 
-        // WebView
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -152,7 +148,6 @@ class OverlayService : Service() {
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
 
-            // 透明背景
             setBackgroundColor(Color.TRANSPARENT)
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
@@ -194,14 +189,11 @@ class OverlayService : Service() {
         }
         if (mediaProjection == null) {
             Log.e(TAG, "MediaProjection not available")
-            runOnWebView("""
-                updateStatus('⚠ 截图权限未授权');
-            """.trimIndent())
+            runOnWebView("updateStatus('⚠ 截图权限未授权')")
             return
         }
 
         try {
-            // 暂时隐藏悬浮窗，避免截到自身
             overlayView?.visibility = View.INVISIBLE
 
             imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 1)
@@ -230,9 +222,7 @@ class OverlayService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Screenshot failed", e)
             overlayView?.visibility = View.VISIBLE
-            runOnWebView("""
-                updateStatus('⚠ 截图失败');
-            """.trimIndent())
+            runOnWebView("updateStatus('⚠ 截图失败')")
         }
     }
 
@@ -255,68 +245,57 @@ class OverlayService : Service() {
     private fun processScreenshot(bitmap: Bitmap) {
         Log.d(TAG, "Processing screenshot ${bitmap.width}x${bitmap.height}")
 
-        // 恢复悬浮窗
-        runOnWebView("""
-            updateStatus('🔍 识别中...');
-        """.trimIndent())
+        runOnWebView("updateStatus('🔍 识别中...')")
 
         resultHandler.post {
             try {
-                // 用识别器分析截图
                 val labels = tileRecognizer.matchHand(bitmap)
                 Log.d(TAG, "Recognized tiles: $labels")
 
                 if (labels.isEmpty()) {
-                    runOnWebView("""
-                        updateStatus('⚠ 未识别到手牌');
-                    """.trimIndent())
+                    runOnWebView("updateStatus('⚠ 未识别到手牌')")
                     return@post
                 }
 
-                // 手牌分析
                 val hand = labels.mapNotNull { ShantenAnalyzer.tileToInt(it) }.filter { it >= 0 }
                 if (hand.size < 5) {
-                    runOnWebView("""
-                        updateStatus('⚠ 手牌不足: ${hand.size}张');
-                    """.trimIndent())
+                    runOnWebView("updateStatus('⚠ 手牌不足: ${hand.size}张')")
                     return@post
                 }
 
-                val sortedHand = hand.sorted()
-                val (shanten, parts) = shantenAnalyzer.calcShanten(sortedHand)
-                val candidates = shantenAnalyzer.analyzeHand(sortedHand)
-
-                // 构建 JSON 结果
-                val result = JSONObject().apply {
-                    put("shanten", shanten)
-                    put("shanten_detail", JSONObject(parts))
-                    put("best_discard", if (candidates.isNotEmpty()) ShantenAnalyzer.intToTile(candidates[0].tile) else "")
-                    put("candidates", JSONArray().apply {
-                        candidates.forEachIndexed { i, c ->
-                            put(JSONObject().apply {
-                                put("tile", ShantenAnalyzer.intToTile(c.tile))
-                                put("shanten_after", c.shantenAfter)
-                                put("ukeire_types", c.ukeireTypes)
-                                put("ukeire_count", c.ukeireCount)
-                                put("ukeire_tiles", JSONArray(c.ukeireTiles.map { ShantenAnalyzer.intToTile(it) }))
-                                put("is_best", i == 0)
-                            })
-                        }
-                    })
-                }
-
-                val jsonStr = result.toString().replace("\\", "\\\\").replace("'", "\\'")
-                runOnWebView("""
-                    onAnalyzeResult('${jsonStr}');
-                """.trimIndent())
-                Log.d(TAG, "Analysis complete: shanten=$shanten, best=${ShantenAnalyzer.intToTile(candidates[0].tile)}")
+                sendAnalysisResult(hand.sorted())
             } catch (e: Exception) {
                 Log.e(TAG, "Analysis error", e)
-                runOnWebView("""
-                    updateStatus('⚠ 分析出错');
-                """.trimIndent())
+                runOnWebView("updateStatus('⚠ 分析出错')")
             }
         }
+    }
+
+    private fun sendAnalysisResult(hand: List<Int>) {
+        val sr = ShantenAnalyzer.calcShanten(hand)
+        val candidates = ShantenAnalyzer.analyzeHand(hand)
+
+        val result = JSONObject()
+        result.put("shanten", sr.shanten)
+        result.put("shanten_detail", JSONObject(sr.toMap()))
+        result.put("best_discard",
+            if (candidates.isNotEmpty()) ShantenAnalyzer.intToTile(candidates[0].tile) else "")
+        val arr = JSONArray()
+        candidates.forEachIndexed { i, c ->
+            val obj = JSONObject()
+            obj.put("tile", ShantenAnalyzer.intToTile(c.tile))
+            obj.put("shanten_after", c.shantenAfter)
+            obj.put("ukeire_types", c.ukeireTypes)
+            obj.put("ukeire_count", c.ukeireCount)
+            obj.put("ukeire_tiles", JSONArray(c.ukeireTiles.map { ShantenAnalyzer.intToTile(it) }))
+            obj.put("is_best", i == 0)
+            arr.put(obj)
+        }
+        result.put("candidates", arr)
+
+        val jsonStr = result.toString().replace("\\", "\\\\").replace("'", "\\'")
+        runOnWebView("onAnalyzeResult('$jsonStr')")
+        Log.d(TAG, "Analysis complete: shanten=${sr.shanten}, best=${ShantenAnalyzer.intToTile(candidates[0].tile)}")
     }
 
     private val resultHandler = Handler(Looper.getMainLooper())
@@ -356,43 +335,15 @@ class OverlayService : Service() {
                     val hand = labels.mapNotNull { ShantenAnalyzer.tileToInt(it) }.filter { it >= 0 }
 
                     if (hand.size < 5) {
-                        runOnWebView("""
-                            updateStatus('⚠ 手牌不足: ${hand.size}张');
-                        """.trimIndent())
+                        runOnWebView("updateStatus('⚠ 手牌不足: ${hand.size}张')")
                         return@post
                     }
 
-                    val sortedHand = hand.sorted()
-                    val (shanten, parts) = shantenAnalyzer.calcShanten(sortedHand)
-                    val candidates = shantenAnalyzer.analyzeHand(sortedHand)
-
-                    val result = JSONObject().apply {
-                        put("shanten", shanten)
-                        put("shanten_detail", JSONObject(parts))
-                        put("best_discard", if (candidates.isNotEmpty()) ShantenAnalyzer.intToTile(candidates[0].tile) else "")
-                        put("candidates", JSONArray().apply {
-                            candidates.forEachIndexed { i, c ->
-                                put(JSONObject().apply {
-                                    put("tile", ShantenAnalyzer.intToTile(c.tile))
-                                    put("shanten_after", c.shantenAfter)
-                                    put("ukeire_types", c.ukeireTypes)
-                                    put("ukeire_count", c.ukeireCount)
-                                    put("ukeire_tiles", JSONArray(c.ukeireTiles.map { ShantenAnalyzer.intToTile(it) }))
-                                    put("is_best", i == 0)
-                                })
-                            }
-                        })
-                    }
-
-                    val jsonStr = result.toString().replace("\\", "\\\\").replace("'", "\\'")
-                    runOnWebView("""
-                        onAnalyzeResult('${jsonStr}');
-                    """.trimIndent())
+                    sendAnalysisResult(hand.sorted())
                 } catch (e: Exception) {
                     Log.e(TAG, "Manual analyze error", e)
-                    runOnWebView("""
-                        updateStatus('⚠ 分析出错: ${e.message}');
-                    """.trimIndent())
+                    val msg = e.message?.replace("'", "\\'") ?: "未知错误"
+                    runOnWebView("updateStatus('⚠ 分析出错: $msg')")
                 }
             }
         }

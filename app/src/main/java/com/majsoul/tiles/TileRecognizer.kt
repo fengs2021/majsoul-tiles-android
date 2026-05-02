@@ -86,7 +86,7 @@ class TileRecognizer(private val context: Context) {
             for (scale in SCALES) {
                 val scaledW = (template.cols() * scale).toInt()
                 val scaledH = (template.rows() * scale).toInt()
-                if (scaledW < 10 || scaledH < 10 || scaledW > handRegion.width || scaledH > handRegion.height)
+                if (scaledW < 10 || scaledH < 10 || scaledW > handRegion.cols() || scaledH > handRegion.rows())
                     continue
 
                 val scaled = Mat()
