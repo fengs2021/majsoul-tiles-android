@@ -169,6 +169,7 @@
   }
   .pick-tile:active { background: var(--accent); color:#0a3a0a; }
   .pick-tile.sel { background: var(--accent); color:#0a3a0a; border-color: var(--accent); }
+  .pick-tile.maxed { opacity: 0.35; pointer-events: none; }
 
   .input-row {
     display: flex;
@@ -259,6 +260,7 @@ const SUITS = [
 ];
 
 let selected = [];
+let tileCount = {};  // 每种牌已选次数，最多4张
 let lastResult = null;
 let autoOn = false;
 
@@ -284,14 +286,20 @@ function initPicker() {
 }
 
 function toggleTile(name, el) {
-  const idx = selected.indexOf(name);
-  if (idx >= 0) {
-    selected.splice(idx, 1);
+  const cnt = tileCount[name] || 0;
+  if (cnt > 0) {
+    // 取消一张
+    const idx = selected.lastIndexOf(name);
+    if (idx >= 0) selected.splice(idx, 1);
+    tileCount[name] = cnt - 1;
+    if (tileCount[name] === 0) delete tileCount[name];
     el.classList.remove('sel');
   } else {
     if (selected.length >= 14) { setStatus('最多14张'); return; }
     selected.push(name);
-    el.classList.add('sel');
+    tileCount[name] = (tileCount[name] || 0) + 1;
+    if (tileCount[name] >= 4) { el.classList.add('sel'); el.classList.add('maxed'); }
+    else el.classList.add('sel');
   }
   document.getElementById('hand-input').value = selected.join(',');
   if (selected.length >= 13 && selected.length <= 14) doAnalyze();

@@ -22,7 +22,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d(TAG, "onCreate")
+        Log.d(TAG, "onCreate, SDK=${Build.VERSION.SDK_INT}")
 
         // 步骤 1：悬浮窗权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -31,9 +31,9 @@ class MainActivity : Activity() {
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:$packageName")
             )
+            @Suppress("DEPRECATION")
             startActivityForResult(intent, OVERLAY_PERMISSION)
         } else {
-            // 已有悬浮窗权限，直接请求截图权限
             requestCapture()
         }
     }
@@ -98,6 +98,13 @@ class MainActivity : Activity() {
         } else {
             startService(intent)
         }
-        finish()
+
+        // Android 14+: Activity 立即 finish 会导致 MediaProjection 失效
+        // 延迟 finish，给 Service 足够时间持有 MediaProjection 引用
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            window.decorView.postDelayed({ finish() }, 1000)
+        } else {
+            finish()
+        }
     }
 }
