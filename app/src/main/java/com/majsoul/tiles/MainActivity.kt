@@ -40,6 +40,7 @@ class MainActivity : Activity() {
 
     private fun requestCapture() {
         Log.d(TAG, "Requesting screen capture")
+        Toast.makeText(this, "即将申请截图权限…", Toast.LENGTH_SHORT).show()
         try {
             val pm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             val intent = pm.createScreenCaptureIntent()
@@ -60,8 +61,10 @@ class MainActivity : Activity() {
             OVERLAY_PERMISSION -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
                     Log.d(TAG, "Overlay permission granted, requesting capture")
-                    // 用 post 延迟一下，确保 Activity 状态稳定
-                    window.decorView.postDelayed({ requestCapture() }, 300)
+                    window.decorView.postDelayed({
+                        Toast.makeText(this, "正在申请截图权限…", Toast.LENGTH_SHORT).show()
+                        requestCapture()
+                    }, 500)
                 } else {
                     Toast.makeText(this, "需要悬浮窗权限才能使用", Toast.LENGTH_LONG).show()
                     finish()

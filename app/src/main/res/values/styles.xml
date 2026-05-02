@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 透明主题：无标题栏、透明背景，确保权限弹窗能正常显示 -->
-    <style name="Transparent" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowIsTranslucent">true</item>
+    <!-- 兼容主题：Android 内置半透明，确保权限弹窗正常弹出 -->
+    <style name="Transparent" parent="@android:style/Theme.Translucent.NoTitleBar">
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowContentOverlay">@null</item>
-        <item name="android:windowIsFloating">false</item>
         <item name="android:backgroundDimEnabled">false</item>
     </style>
 </resources>
