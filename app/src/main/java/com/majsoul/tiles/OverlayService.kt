@@ -169,8 +169,9 @@ class OverlayService : Service() {
             }
 
             if (projection == null) {
-                log("CAPTURE FAIL: projection is null")
-                runOnWebView("updateStatus('⚠ 无截图权限，请重启App')")
+                log("CAPTURE FAIL: projection null, launching CaptureActivity")
+                runOnWebView("updateStatus('📋 申请截图权限…')")
+                startActivity(Intent(this@OverlayService, CaptureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 return
             }
 

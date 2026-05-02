@@ -32,5 +32,11 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <activity
+            android:name=".CaptureActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true" />
+
     </application>
 </manifest>
